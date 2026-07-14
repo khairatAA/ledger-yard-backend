@@ -143,7 +143,7 @@ Docker is used to run Redis locally. PostgreSQL may run locally or through any a
 Clone the repository and install dependencies:
 
 ```bash
-git clone <repository-url>
+git clone <https://github.com/khairatAA/ledger-yard-backend>
 cd ledger-yard-backend
 npm install
 ```
