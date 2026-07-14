@@ -1,0 +1,294 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LeaseStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum InvoiceLineType {
+  RENT
+  LATE_FEE
+  ADJUSTMENT
+  SECURITY_DEPOSIT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REVERSED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  OFFLINE
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum LedgerEntryType {
+  INVOICE
+  PAYMENT
+  LATE_FEE
+  ADJUSTMENT
+  REFUND
+  REVERSAL
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  properties    Property[]
+  leases        Lease[]
+  invoices      Invoice[]
+  payments      Payment[]
+  webhookEvents WebhookEvent[]
+  ledgerEntries LedgerEntry[]
+
+  @@map("organizations")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  fullName  String   @map("full_name")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  leases   Lease[]
+  payments Payment[]
+
+  @@map("users")
+}
+
+model Property {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  propertyType   String   @map("property_type")
+  timezone       String   @default("Africa/Lagos")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  units        Unit[]
+
+  @@index([organizationId])
+  @@map("properties")
+}
+
+model Unit {
+  id                   String       @id @default(uuid()) @db.Uuid
+  propertyId           String       @map("property_id") @db.Uuid
+  name                 String
+  baseRentMinor        BigInt       @map("base_rent_minor")
+  securityDepositMinor BigInt       @default(0) @map("security_deposit_minor")
+  currencyCode         String       @default("NGN") @map("currency_code") @db.Char(3)
+  billingCycle         BillingCycle @map("billing_cycle")
+  status               String       @default("AVAILABLE")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  property Property @relation(fields: [propertyId], references: [id])
+  leases   Lease[]
+
+  @@index([propertyId])
+  @@map("units")
+}
+
+model Lease {
+  id                   String       @id @default(uuid()) @db.Uuid
+  organizationId       String       @map("organization_id") @db.Uuid
+  unitId               String       @map("unit_id") @db.Uuid
+  tenantId             String       @map("tenant_id") @db.Uuid
+  startDate            DateTime     @map("start_date") @db.Date
+  endDate              DateTime     @map("end_date") @db.Date
+  rentAmountMinor      BigInt       @map("rent_amount_minor")
+  securityDepositMinor BigInt       @default(0) @map("security_deposit_minor")
+  currencyCode         String       @default("NGN") @map("currency_code") @db.Char(3)
+  billingCycle         BillingCycle @map("billing_cycle")
+  nextInvoiceDate      DateTime?    @map("next_invoice_date") @db.Date
+  status               LeaseStatus  @default(DRAFT)
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  unit         Unit         @relation(fields: [unitId], references: [id])
+  tenant       User         @relation(fields: [tenantId], references: [id])
+  invoices     Invoice[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, nextInvoiceDate])
+  @@index([unitId, status])
+  @@map("leases")
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  leaseId         String        @map("lease_id") @db.Uuid
+  periodStart     DateTime      @map("period_start") @db.Date
+  periodEnd       DateTime      @map("period_end") @db.Date
+  issueDate       DateTime      @map("issue_date") @db.Date
+  dueDate         DateTime      @map("due_date") @db.Date
+  totalMinor      BigInt        @map("total_minor")
+  amountPaidMinor BigInt        @default(0) @map("amount_paid_minor")
+  currencyCode    String        @map("currency_code") @db.Char(3)
+  status          InvoiceStatus @default(PENDING)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  organization  Organization        @relation(fields: [organizationId], references: [id])
+  lease         Lease               @relation(fields: [leaseId], references: [id])
+  lines         InvoiceLine[]
+  allocations   PaymentAllocation[]
+  ledgerEntries LedgerEntry[]
+
+  // Main idempotency safeguard for invoice generation.
+  @@unique([organizationId, leaseId, periodStart, periodEnd])
+  @@index([organizationId, status])
+  @@index([leaseId])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String          @id @default(uuid()) @db.Uuid
+  invoiceId   String          @map("invoice_id") @db.Uuid
+  type        InvoiceLineType
+  description String
+  amountMinor BigInt          @map("amount_minor")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  organizationId    String        @map("organization_id") @db.Uuid
+  tenantId          String        @map("tenant_id") @db.Uuid
+  provider          String
+  providerReference String        @map("provider_reference")
+  paymentMethod     PaymentMethod @map("payment_method")
+  amountMinor       BigInt        @map("amount_minor")
+  currencyCode      String        @map("currency_code") @db.Char(3)
+  status            PaymentStatus @default(PENDING)
+  providerUpdatedAt DateTime?     @map("provider_updated_at")
+  paidAt            DateTime?     @map("paid_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  organization  Organization        @relation(fields: [organizationId], references: [id])
+  tenant        User                @relation(fields: [tenantId], references: [id])
+  allocations   PaymentAllocation[]
+  ledgerEntries LedgerEntry[]
+
+  // Prevents the same provider transaction from being recorded twice.
+  @@unique([provider, providerReference])
+  @@index([organizationId, status])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id          String   @id @default(uuid()) @db.Uuid
+  paymentId   String   @map("payment_id") @db.Uuid
+  invoiceId   String   @map("invoice_id") @db.Uuid
+  amountMinor BigInt   @map("amount_minor")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  // Prevents duplicate allocation for the same payment and invoice.
+  @@unique([paymentId, invoiceId])
+  @@index([invoiceId])
+  @@map("payment_allocations")
+}
+
+model WebhookEvent {
+  id               String                  @id @default(uuid()) @db.Uuid
+  organizationId   String                  @map("organization_id") @db.Uuid
+  provider         String
+  providerEventId  String                  @map("provider_event_id")
+  eventType        String                  @map("event_type")
+  payload          Json
+  processingStatus WebhookProcessingStatus @default(RECEIVED) @map("processing_status")
+  errorMessage     String?                 @map("error_message")
+  receivedAt       DateTime                @default(now()) @map("received_at")
+  processedAt      DateTime?               @map("processed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  // Main protection against duplicate webhook delivery.
+  @@unique([provider, providerEventId])
+  @@index([organizationId, processingStatus])
+  @@map("webhook_events")
+}
+
+model LedgerEntry {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  invoiceId      String?         @map("invoice_id") @db.Uuid
+  paymentId      String?         @map("payment_id") @db.Uuid
+  entryType      LedgerEntryType @map("entry_type")
+  direction      LedgerDirection
+  amountMinor    BigInt          @map("amount_minor")
+  currencyCode   String          @map("currency_code") @db.Char(3)
+  idempotencyKey String          @map("idempotency_key")
+  description    String?
+  metadata       Json?
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
+  payment      Payment?     @relation(fields: [paymentId], references: [id])
+
+  // Prevents one financial event from being posted twice.
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt])
+  @@index([invoiceId])
+  @@index([paymentId])
+  @@map("ledger_entries")
+}
