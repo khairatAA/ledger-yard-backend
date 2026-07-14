@@ -19,15 +19,6 @@ The implementation includes:
 - Handling of payments received after an invoice is settled
 - Integration tests for the main financial edge cases
 
-The following areas are intentionally outside the assessment scope:
-
-- Authentication and authorization
-- Dashboard endpoints
-- Maintenance request implementation
-- Frontend
-- Real payment provider integration
-- Deployment and infrastructure provisioning
-
 ## Technology
 
 - NestJS
@@ -285,18 +276,6 @@ The test suite covers:
 - Payment received after an invoice is already settled
 
 The tests create isolated records and clean them up afterward.
-
-Prisma 7 dynamically loads part of its query compiler, so the integration-test command runs Jest with Node’s VM modules flag. An experimental VM modules warning may be displayed; it does not indicate a test failure.
-
-## Quality Checks
-
-Run the following before submission:
-
-```bash
-npm run build
-npm run lint
-npm run test:integration
-```
 
 ## Known Limitations
 
