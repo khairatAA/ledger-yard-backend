@@ -4,6 +4,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from './database/prisma.module';
 import { BillingModule } from './billing/billing.module';
 import { PaymentsModule } from './payments/payments.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -26,6 +28,10 @@ import { PaymentsModule } from './payments/payments.module';
     BillingModule,
 
     PaymentsModule,
+
+    AuthModule,
+
+    UsersModule,
   ],
 })
 export class AppModule {}
