@@ -63,6 +63,8 @@ async function main() {
       id: ids.tenant,
       email: 'tenant@ledgeryard.test',
       fullName: 'Demo Tenant',
+      passwordHash:
+        '$2b$10$KIXQJ0Z1F5z6G9Y8Z1F5zOeQJ0Z1F5z6G9Y8Z1F5zOeQJ0Z1F5z6G9Y8Z1F5zOe', // bcrypt hash for "password"
     },
   });
 
