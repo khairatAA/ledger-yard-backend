@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/database/prisma.service';
+import { PrismaService } from '../database/prisma.service';
 import { PublicUser } from './types/public-user.type';
 import { CreateUserData } from './types/create-user-data.type';
+import { AuthenticationUser } from './types/authentication-user.type';
 
 @Injectable()
 export class UsersService {
@@ -24,6 +25,21 @@ export class UsersService {
         email: true,
         isActive: true,
         createdAt: true,
+      },
+    });
+  }
+
+  async findForAuthentication(
+    email: string,
+  ): Promise<AuthenticationUser | null> {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        isActive: true,
+        passwordHash: true,
       },
     });
   }
